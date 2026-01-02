@@ -182,7 +182,7 @@ async def cmd_setbalance(msg: Message, bot: Bot):
             return await msg.answer("❌ Формат: /setbalance [user_id] [количество]")
         
         uid, amount = int(p[1]), int(p[2])
-        ud = get_user_data(uid)
+        ud = get_user_data(uid, None, DB_FILE)
         old_balance = ud['balance']
         ud['balance'] = amount
         save_database(DB_FILE)
@@ -227,7 +227,7 @@ async def cmd_addbalance(msg: Message, bot: Bot):
             return await msg.answer("❌ Формат: /addbalance [user_id] [количество]")
         
         uid, amount = int(p[1]), int(p[2])
-        ud = get_user_data(uid)
+        ud = get_user_data(uid, None, DB_FILE)
         old_balance = ud['balance']
         ud['balance'] += amount
         save_database(DB_FILE)
