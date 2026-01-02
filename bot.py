@@ -1495,20 +1495,73 @@ async def main():
     logger.info("🎰 Лотерейный бот запущен!")
     logger.info("💳 Прием платежей в Telegram Stars активирован")
     
-    # Получаем порт из переменной окружения (для Render)
+    # Получаем порт и URL из переменных окружения
     port = int(os.getenv('PORT', 8080))
+    webhook_url = os.getenv('RENDER_EXTERNAL_URL')
     
-    # Запускаем веб-сервер
-    web_runner = await start_web_server(port)
-    
-    try:
-        await dp.start_polling(bot)
-    finally:
-        # Останавливаем веб-сервер
-        await web_runner.cleanup()
-        # Сохраняем базу данных при остановке
-        save_database(DB_FILE)
-        logger.info("👋 Бот остановлен")
+    # Если есть RENDER_EXTERNAL_URL - используем webhook, иначе polling
+    if webhook_url:
+        webhook_path = f"/webhook/{TOKEN}"
+        webhook_full_url = f"{webhook_url}{webhook_path}"
+        
+        logger.info(f"🌐 Режим: Webhook")
+        logger.info(f"📍 URL: {webhook_full_url}")
+        
+        # Удаляем старый webhook и устанавливаем новый
+        await bot.delete_webhook(drop_pending_updates=True)
+        await bot.set_webhook(
+            url=webhook_full_url,
+            drop_pending_updates=True
+        )
+        
+        # Запускаем веб-сервер с webhook
+        from aiohttp import web
+        app = web.Application()
+        
+        # Health check endpoint
+        async def health(request):
+            return web.Response(text="Bot is running! 🎰")
+        
+        # Webhook endpoint
+        async def webhook_handler(request):
+            update = await request.json()
+            from aiogram.types import Update
+            await dp.feed_update(bot, Update(**update))
+            return web.Response(text="OK")
+        
+        app.router.add_get('/', health)
+        app.router.add_get('/health', health)
+        app.router.add_post(webhook_path, webhook_handler)
+        
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, '0.0.0.0', port)
+        await site.start()
+        
+        logger.info(f"🚀 Webhook запущен на порту {port}")
+        
+        # Держим сервер запущенным
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await runner.cleanup()
+            save_database(DB_FILE)
+            logger.info("👋 Бот остановлен")
+    else:
+        # Локальный режим - используем polling
+        logger.info("🌐 Режим: Polling (локальный)")
+        
+        # Запускаем веб-сервер
+        web_runner = await start_web_server(port)
+        
+        try:
+            await dp.start_polling(bot)
+        finally:
+            # Останавливаем веб-сервер
+            await web_runner.cleanup()
+            # Сохраняем базу данных при остановке
+            save_database(DB_FILE)
+            logger.info("👋 Бот остановлен")
 
 
 if __name__ == '__main__':
