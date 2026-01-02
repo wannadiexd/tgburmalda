@@ -74,8 +74,6 @@ async def clear_message_ids(user_id: int):
         del last_bot_messages[user_id]
 
 
-# ==================== КОМАНДЫ ====================
-
 @router.message(CommandStart())
 async def cmd_start(msg: Message, bot: Bot):
     """Команда /start"""
@@ -428,11 +426,15 @@ async def cmd_withdraw(msg: Message, state: FSMContext):
     await state.set_state(BetStates.waiting_withdraw_amount)
 
 
-# ==================== ОБРАБОТЧИКИ ТЕКСТОВЫХ КОМАНД ====================
-
 @router.message(F.text == "🎮 Играть")
 async def text_play(msg: Message, bot: Bot):
     """Текстовая команда Играть"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
+    
     await delete_last_message(msg.from_user.id, bot)
     
     sent_msg = await bot.send_message(
@@ -446,6 +448,12 @@ async def text_play(msg: Message, bot: Bot):
 @router.message(F.text == "👤 Профиль")
 async def text_profile(msg: Message, bot: Bot):
     """Текстовая команда Профиль"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
+    
     ud = get_user_data(msg.from_user.id, msg.from_user, DB_FILE)
     
     # Подсчет выигрышных и проигрышных игр
@@ -481,6 +489,12 @@ async def text_profile(msg: Message, bot: Bot):
 @router.message(F.text == "ℹ️ Правила")
 async def text_rules(msg: Message, bot: Bot):
     """Текстовая команда Правила"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
+    
     await delete_last_message(msg.from_user.id, bot)
     
     sent_msg = await bot.send_message(
@@ -491,22 +505,106 @@ async def text_rules(msg: Message, bot: Bot):
     await save_message_id(msg.from_user.id, sent_msg.message_id)
 
 
-@router.message(F.text == "◀️ Назад")
-async def back_to_main(msg: Message, bot: Bot):
-    """Вернуться в главное меню"""
+@router.message(F.text.in_(["🏀 Баскетбол", "🎲 Кости", "⚽ Футбол", "🎯 Дартс", "🎳 Боулинг"]))
+async def game_selected(msg: Message, state: FSMContext, bot: Bot):
+    """Выбор игры через Reply клавиатуру"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
+    
     await delete_last_message(msg.from_user.id, bot)
     
+    game = msg.text.split()[0]  # Берем только эмодзи
+    
+    if game == '🏀':
+        txt = f"{game} Баскетбол\n\nВыбери тип ставки:"
+    elif game == '🎲':
+        txt = f"{game} Кости\n\nВыбери тип ставки:"
+    elif game == '⚽':
+        txt = f"{game} Футбол\n\nВыбери тип ставки:"
+    elif game == '🎯':
+        txt = f"{game} Дартс\n\nВыбери тип ставки:"
+    elif game == '🎳':
+        txt = f"{game} Боулинг\n\nВыбери тип ставки:"
+    
+    await state.update_data(selected_game=game)
     sent_msg = await bot.send_message(
         chat_id=msg.from_user.id,
-        text="🎰 Главное меню",
-        reply_markup=get_reply_keyboard()
+        text=txt,
+        reply_markup=get_bet_type_keyboard(game)
     )
     await save_message_id(msg.from_user.id, sent_msg.message_id)
+
+
+@router.message(F.text == "◀️ Назад")
+async def back_to_main(msg: Message, state: FSMContext, bot: Bot):
+    """Вернуться назад (контекстная кнопка)"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
+    
+    await delete_last_message(msg.from_user.id, bot)
+    
+    data = await state.get_data()
+    game = data.get('selected_game')
+    bet_type = data.get('selected_bet_type')
+    
+    # Если выбрана сумма - возвращаемся к выбору типа ставки
+    if game and bet_type:
+        await state.update_data(selected_bet_type=None)
+        
+        if game == '🏀':
+            txt = f"{game} Баскетбол\n\nВыбери тип ставки:"
+        elif game == '🎲':
+            txt = f"{game} Кости\n\nВыбери тип ставки:"
+        elif game == '⚽':
+            txt = f"{game} Футбол\n\nВыбери тип ставки:"
+        elif game == '🎯':
+            txt = f"{game} Дартс\n\nВыбери тип ставки:"
+        elif game == '🎳':
+            txt = f"{game} Боулинг\n\nВыбери тип ставки:"
+        
+        sent_msg = await bot.send_message(
+            chat_id=msg.from_user.id,
+            text=txt,
+            reply_markup=get_bet_type_keyboard(game)
+        )
+        await save_message_id(msg.from_user.id, sent_msg.message_id)
+    
+    # Если выбрана только игра - возвращаемся к выбору игр
+    elif game:
+        await state.clear()
+        sent_msg = await bot.send_message(
+            chat_id=msg.from_user.id,
+            text="🎮 Выбери игру:",
+            reply_markup=get_games_reply_keyboard()
+        )
+        await save_message_id(msg.from_user.id, sent_msg.message_id)
+    
+    # Если ничего не выбрано - возвращаемся в главное меню
+    else:
+        await state.clear()
+        sent_msg = await bot.send_message(
+            chat_id=msg.from_user.id,
+            text="🎰 Главное меню",
+            reply_markup=get_reply_keyboard()
+        )
+        await save_message_id(msg.from_user.id, sent_msg.message_id)
 
 
 @router.message(F.text.in_(["💰 Пополнить", "💸 Вывод"]))
 async def profile_actions(msg: Message, state: FSMContext, bot: Bot):
     """Действия из профиля"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
+    
     await delete_last_message(msg.from_user.id, bot)
     
     if msg.text == "💰 Пополнить":
@@ -542,6 +640,12 @@ async def profile_actions(msg: Message, state: FSMContext, bot: Bot):
 @router.message(F.text.startswith("⭐ "))
 async def deposit_amount_selected(msg: Message, bot: Bot, state: FSMContext):
     """Выбор фиксированной суммы пополнения"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
+    
     try:
         amount = int(msg.text.replace("⭐ ", ""))
         await delete_last_message(msg.from_user.id, bot)
@@ -572,6 +676,12 @@ async def deposit_amount_selected(msg: Message, bot: Bot, state: FSMContext):
 @router.message(F.text == "✏️ Своя сумма")
 async def custom_deposit_amount(msg: Message, state: FSMContext, bot: Bot):
     """Своя сумма для пополнения"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
+    
     await delete_last_message(msg.from_user.id, bot)
     
     sent_msg = await bot.send_message(
@@ -612,10 +722,6 @@ async def game_selected(msg: Message, state: FSMContext, bot: Bot):
         reply_markup=get_bet_type_keyboard(game)
     )
     await save_message_id(msg.from_user.id, sent_msg.message_id)
-
-
-# ==================== ОБРАБОТЧИКИ ВЫБОРА СТАВКИ ====================
-# Старые текстовые обработчики удалены - теперь используются inline-кнопки
 
 
 async def play_from_balance_text(msg: Message, game: str, bet_type: str, amount: int, user_data: dict, state: FSMContext):
@@ -747,58 +853,86 @@ async def play_from_balance_callback(cb: CallbackQuery, game: str, bet_type: str
     await state.clear()
 
 
-# ==================== ОБРАБОТЧИКИ CALLBACK ДЛЯ ВЫБОРА СТАВОК ====================
 
-@router.callback_query(F.data.startswith("bet_type:"))
-async def bet_type_selected_callback(cb: CallbackQuery, state: FSMContext, bot: Bot):
-    """Выбор типа ставки через inline-кнопку"""
-    await cb.answer()
+@router.message(F.text.in_(["🎯 Гол", "🔄 Застрял", "❌ Мимо", "2️⃣4️⃣6️⃣ Четное", "1️⃣3️⃣5️⃣ Нечетное", 
+                             "4️⃣5️⃣6️⃣ Больше 3", "1️⃣2️⃣3️⃣ Меньше 4", "⚽ Гол", "🎯 Центр", "🔴 Красное", 
+                             "⚪ Белое", "💥 Страйк"]))
+async def bet_type_selected_text(msg: Message, state: FSMContext, bot: Bot):
+    """Выбор типа ставки через Reply кнопку"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
     
-    bet_type = cb.data.split(":")[1]
+    await delete_last_message(msg.from_user.id, bot)
+    
+    # Мапинг кнопок на типы ставок
+    bet_mapping = {
+        "🎯 Гол": "гол",
+        "⚽ Гол": "гол",
+        "🔄 Застрял": "застрял",
+        "❌ Мимо": "мимо",
+        "2️⃣4️⃣6️⃣ Четное": "четное",
+        "1️⃣3️⃣5️⃣ Нечетное": "нечетное",
+        "4️⃣5️⃣6️⃣ Больше 3": "больше_3",
+        "1️⃣2️⃣3️⃣ Меньше 4": "меньше_4",
+        "🎯 Центр": "центр",
+        "🔴 Красное": "красное",
+        "⚪ Белое": "белое",
+        "💥 Страйк": "страйк"
+    }
+    
+    bet_type = bet_mapping.get(msg.text)
     data = await state.get_data()
     game = data.get('selected_game')
     
     if not game:
-        await cb.message.edit_text("❌ Ошибка: игра не выбрана")
-        return
+        return await msg.answer("❌ Ошибка: игра не выбрана")
     
     await state.update_data(selected_bet_type=bet_type)
     
-    ud = get_user_data(cb.from_user.id, cb.from_user, DB_FILE)
+    ud = get_user_data(msg.from_user.id, msg.from_user, DB_FILE)
     
-    await cb.message.edit_text(
-        f"{game} Ставка: {bet_type}\n\n"
-        f"💳 Твой баланс: {ud['balance']} ⭐\n\n"
-        f"Выбери сумму ставки:",
+    sent_msg = await bot.send_message(
+        chat_id=msg.from_user.id,
+        text=f"{game} Ставка: {bet_type}\n\n"
+             f"💳 Твой баланс: {ud['balance']} ⭐\n\n"
+             f"Выбери сумму ставки:",
         reply_markup=get_bet_amount_keyboard()
     )
+    await save_message_id(msg.from_user.id, sent_msg.message_id)
 
 
-@router.callback_query(F.data.startswith("bet_amount:"))
-async def bet_amount_selected_callback(cb: CallbackQuery, state: FSMContext, bot: Bot):
-    """Выбор суммы ставки через inline-кнопку"""
-    await cb.answer()
+@router.message(F.text.in_(["⭐ 1", "⭐ 5", "⭐ 10", "⭐ 25", "⭐ 50", "⭐ 100", "⭐ 250", "⭐ 500", "⭐ 1000"]))
+async def bet_amount_selected_text(msg: Message, state: FSMContext, bot: Bot):
+    """Выбор суммы ставки через Reply кнопку"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
     
-    amount = int(cb.data.split(":")[1])
+    await delete_last_message(msg.from_user.id, bot)
+    
+    amount = int(msg.text.split()[1])  # Берем число из "⭐ 100"
     data = await state.get_data()
     game = data.get('selected_game')
     bet_type = data.get('selected_bet_type')
     
     if not game or not bet_type:
-        await cb.message.edit_text("❌ Ошибка: игра или ставка не выбрана")
-        return
+        return await msg.answer("❌ Ошибка: игра или ставка не выбрана")
     
-    ud = get_user_data(cb.from_user.id, cb.from_user, DB_FILE)
+    ud = get_user_data(msg.from_user.id, msg.from_user, DB_FILE)
     
     if ud['balance'] >= amount:
         # Играем с баланса
-        await cb.message.delete()
-        await play_from_balance_callback(cb, game, bet_type, amount, ud, state, bot)
+        await play_from_balance_text(msg, game, bet_type, amount, ud, state)
     else:
         # Запрашиваем оплату
-        await cb.message.edit_text(f"💳 Оплата {amount} ⭐\n\nОтправляем счет...")
+        await msg.answer(f"💳 Оплата {amount} ⭐\n\nОтправляем счет...")
         await bot.send_invoice(
-            chat_id=cb.from_user.id,
+            chat_id=msg.from_user.id,
             title=f"{game} {bet_type}",
             description=f"Ставка {amount} ⭐ на {bet_type}",
             payload=f"{game}:{bet_type}:{amount}",
@@ -812,54 +946,6 @@ async def bet_amount_selected_callback(cb: CallbackQuery, state: FSMContext, bot
             pending_amount=amount
         )
 
-
-@router.callback_query(F.data == "back_to_games")
-async def back_to_games_callback(cb: CallbackQuery, state: FSMContext):
-    """Возврат к выбору игр"""
-    await cb.answer()
-    await state.clear()
-    await cb.message.edit_text(
-        "🎮 Выбери игру:",
-        reply_markup=None
-    )
-    sent_msg = await cb.message.answer(
-        "🎮 Игры:",
-        reply_markup=get_games_reply_keyboard()
-    )
-    await save_message_id(cb.from_user.id, sent_msg.message_id)
-
-
-@router.callback_query(F.data == "back_to_bet_type")
-async def back_to_bet_type_callback(cb: CallbackQuery, state: FSMContext):
-    """Возврат к выбору типа ставки"""
-    await cb.answer()
-    
-    data = await state.get_data()
-    game = data.get('selected_game')
-    
-    if not game:
-        await cb.message.edit_text("❌ Ошибка: игра не выбрана")
-        return
-    
-    if game == '🏀':
-        txt = f"{game} Баскетбол\n\nВыбери тип ставки:"
-    elif game == '🎲':
-        txt = f"{game} Кости\n\nВыбери тип ставки:"
-    elif game == '⚽':
-        txt = f"{game} Футбол\n\nВыбери тип ставки:"
-    elif game == '🎯':
-        txt = f"{game} Дартс\n\nВыбери тип ставки:"
-    elif game == '🎳':
-        txt = f"{game} Боулинг\n\nВыбери тип ставки:"
-    
-    await cb.message.edit_text(
-        txt,
-        reply_markup=get_bet_type_keyboard(game)
-    )
-
-
-# ==================== СТАРЫЕ CALLBACK ОБРАБОТЧИКИ (удалим) ====================
-# ==================== АДМИН CALLBACK ОБРАБОТЧИКИ ====================
 
 @router.callback_query(F.data == "admin_users")
 async def admin_show_users(cb: CallbackQuery):
@@ -1089,11 +1175,15 @@ async def send_stars_to_user(cb: CallbackQuery, bot: Bot):
         logger.error(f"Ошибка отправки звезд: {e}")
 
 
-# ==================== ОТМЕНА ====================
-
 @router.message(F.text == "❌ Отменить")
 async def cancel_operation(msg: Message, state: FSMContext, bot: Bot):
     """Отмена текущей операции"""
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
+    
     current_state = await state.get_state()
     await state.clear()
     
@@ -1107,7 +1197,6 @@ async def cancel_operation(msg: Message, state: FSMContext, bot: Bot):
     await save_message_id(msg.from_user.id, sent_msg.message_id)
 
 
-# ==================== ОБРАБОТЧИКИ СОСТОЯНИЙ ====================
 
 @router.message(StateFilter(BetStates.waiting_deposit_amount), F.text)
 async def process_deposit_amount(msg: Message, state: FSMContext, bot: Bot):
@@ -1117,6 +1206,12 @@ async def process_deposit_amount(msg: Message, state: FSMContext, bot: Bot):
     # Игнорируем кнопку отмены (она обрабатывается отдельно)
     if msg.text == "❌ Отменить":
         return
+    
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
     
     try:
         amount = int(msg.text)
@@ -1154,6 +1249,12 @@ async def process_withdraw(msg: Message, state: FSMContext, bot: Bot):
     # Игнорируем кнопку отмены (она обрабатывается отдельно)
     if msg.text == "❌ Отменить":
         return
+    
+    # Удаляем сообщение пользователя
+    try:
+        await msg.delete()
+    except:
+        pass
     
     ud = get_user_data(msg.from_user.id, msg.from_user, DB_FILE)
     
@@ -1205,11 +1306,9 @@ async def process_withdraw(msg: Message, state: FSMContext, bot: Bot):
         await msg.answer("❌ Введи число")
 
 
-# ==================== ОТМЕНА ====================
-
 @router.message(F.text == "❌ Отменить")
-async def cancel_operation(msg: Message, state: FSMContext, bot: Bot):
-    """Отмена текущей операции"""
+async def cancel_operation_withdrawal(msg: Message, state: FSMContext, bot: Bot):
+    """Отмена операции вывода"""
     current_state = await state.get_state()
     await state.clear()
     
@@ -1227,7 +1326,6 @@ async def cancel_operation(msg: Message, state: FSMContext, bot: Bot):
     await save_message_id(msg.from_user.id, sent_msg.message_id)
 
 
-# ==================== ПЛАТЕЖИ ====================
 
 @router.pre_checkout_query()
 async def pre_checkout(pcq: PreCheckoutQuery):
@@ -1344,8 +1442,6 @@ async def success_pay(msg: Message, state: FSMContext, bot: Bot):
         save_database(DB_FILE)
         await msg.answer(txt)
 
-
-# ==================== ЗАПУСК БОТА ====================
 
 async def main():
     """Главная функция"""

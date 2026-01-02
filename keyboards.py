@@ -195,65 +195,53 @@ def get_cancel_reply_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
-def get_bet_type_keyboard(game: str) -> InlineKeyboardMarkup:
-    """Inline клавиатура для выбора типа ставки"""
+def get_bet_type_keyboard(game: str) -> ReplyKeyboardMarkup:
+    """Reply клавиатура для выбора типа ставки"""
     buttons = []
     
     if game == '🏀':
         buttons = [
-            [InlineKeyboardButton(text="🎯 Гол", callback_data="bet_type:гол")],
-            [InlineKeyboardButton(text="🔄 Застрял", callback_data="bet_type:застрял")],
-            [InlineKeyboardButton(text="❌ Мимо", callback_data="bet_type:мимо")]
+            [KeyboardButton(text="🎯 Гол"), KeyboardButton(text="🔄 Застрял")],
+            [KeyboardButton(text="❌ Мимо")],
+            [KeyboardButton(text="◀️ Назад")]
         ]
     elif game == '🎲':
         buttons = [
-            [InlineKeyboardButton(text="2️⃣ 4️⃣ 6️⃣ Четное", callback_data="bet_type:четное")],
-            [InlineKeyboardButton(text="1️⃣ 3️⃣ 5️⃣ Нечетное", callback_data="bet_type:нечетное")],
-            [InlineKeyboardButton(text="4️⃣ 5️⃣ 6️⃣ Больше 3", callback_data="bet_type:больше_3")],
-            [InlineKeyboardButton(text="1️⃣ 2️⃣ 3️⃣ Меньше 4", callback_data="bet_type:меньше_4")]
+            [KeyboardButton(text="2️⃣4️⃣6️⃣ Четное"), KeyboardButton(text="1️⃣3️⃣5️⃣ Нечетное")],
+            [KeyboardButton(text="4️⃣5️⃣6️⃣ Больше 3"), KeyboardButton(text="1️⃣2️⃣3️⃣ Меньше 4")],
+            [KeyboardButton(text="◀️ Назад")]
         ]
     elif game == '⚽':
         buttons = [
-            [InlineKeyboardButton(text="⚽ Гол", callback_data="bet_type:гол")],
-            [InlineKeyboardButton(text="❌ Мимо", callback_data="bet_type:мимо")]
+            [KeyboardButton(text="⚽ Гол"), KeyboardButton(text="❌ Мимо")],
+            [KeyboardButton(text="◀️ Назад")]
         ]
     elif game == '🎯':
         buttons = [
-            [InlineKeyboardButton(text="🎯 Центр", callback_data="bet_type:центр")],
-            [InlineKeyboardButton(text="🔴 Красное", callback_data="bet_type:красное")],
-            [InlineKeyboardButton(text="⚪ Белое", callback_data="bet_type:белое")],
-            [InlineKeyboardButton(text="❌ Мимо", callback_data="bet_type:мимо")]
+            [KeyboardButton(text="🎯 Центр"), KeyboardButton(text="🔴 Красное")],
+            [KeyboardButton(text="⚪ Белое"), KeyboardButton(text="❌ Мимо")],
+            [KeyboardButton(text="◀️ Назад")]
         ]
     elif game == '🎳':
         buttons = [
-            [InlineKeyboardButton(text="💥 Страйк", callback_data="bet_type:страйк")],
-            [InlineKeyboardButton(text="❌ Мимо", callback_data="bet_type:мимо")]
+            [KeyboardButton(text="💥 Страйк"), KeyboardButton(text="❌ Мимо")],
+            [KeyboardButton(text="◀️ Назад")]
         ]
     
-    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_games")])
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
-def get_bet_amount_keyboard() -> InlineKeyboardMarkup:
-    """Inline клавиатура для выбора суммы ставки"""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="⭐ 1", callback_data="bet_amount:1"),
-            InlineKeyboardButton(text="⭐ 5", callback_data="bet_amount:5"),
-            InlineKeyboardButton(text="⭐ 10", callback_data="bet_amount:10")
+def get_bet_amount_keyboard() -> ReplyKeyboardMarkup:
+    """Reply клавиатура для выбора суммы ставки"""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="⭐ 1"), KeyboardButton(text="⭐ 5"), KeyboardButton(text="⭐ 10")],
+            [KeyboardButton(text="⭐ 25"), KeyboardButton(text="⭐ 50"), KeyboardButton(text="⭐ 100")],
+            [KeyboardButton(text="⭐ 250"), KeyboardButton(text="⭐ 500"), KeyboardButton(text="⭐ 1000")],
+            [KeyboardButton(text="◀️ Назад")]
         ],
-        [
-            InlineKeyboardButton(text="⭐ 25", callback_data="bet_amount:25"),
-            InlineKeyboardButton(text="⭐ 50", callback_data="bet_amount:50"),
-            InlineKeyboardButton(text="⭐ 100", callback_data="bet_amount:100")
-        ],
-        [
-            InlineKeyboardButton(text="⭐ 250", callback_data="bet_amount:250"),
-            InlineKeyboardButton(text="⭐ 500", callback_data="bet_amount:500"),
-            InlineKeyboardButton(text="⭐ 1000", callback_data="bet_amount:1000")
-        ],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_bet_type")]
-    ])
+        resize_keyboard=True
+    )
+
 
 
