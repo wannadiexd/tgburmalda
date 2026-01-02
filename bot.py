@@ -57,8 +57,6 @@ async def delete_last_message(user_id: int, bot: Bot):
             except:
                 pass
         del last_bot_messages[user_id]
-        # Небольшая задержка для анимации удаления
-        await asyncio.sleep(0.15)
 
 
 async def save_message_id(user_id: int, message_id: int):
