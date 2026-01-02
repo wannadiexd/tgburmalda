@@ -22,7 +22,7 @@ from keyboards import (
     get_game_result_keyboard, get_back_button, get_reply_keyboard,
     get_profile_keyboard, get_deposit_keyboard, get_cancel_keyboard,
     get_games_reply_keyboard, get_profile_reply_keyboard, get_deposit_amounts_keyboard,
-    get_cancel_reply_keyboard
+    get_cancel_reply_keyboard, get_bet_type_keyboard, get_bet_amount_keyboard
 )
 from game_logic import determine_game_result, get_rules_text
 from logger import (
@@ -658,56 +658,21 @@ async def game_selected(msg: Message, state: FSMContext, bot: Bot):
     
     # Показываем варианты ставок
     if game == '🏀':
-        txt = (
-            f"{game} Баскетбол\n\n"
-            f"Выбери ставку:\n"
-            f"1️⃣ гол - мяч в кольце\n"
-            f"2️⃣ застрял - мяч застрял на кольце\n"
-            f"3️⃣ мимо - мяч мимо кольца\n\n"
-            f"Напиши номер (1, 2 или 3)"
-        )
+        txt = f"{game} Баскетбол\n\nВыбери тип ставки:"
     elif game == '🎲':
-        txt = (
-            f"{game} Кости\n\n"
-            f"Выбери ставку:\n"
-            f"1️⃣ четное - выпадет четное\n"
-            f"2️⃣ нечетное - выпадет нечетное\n"
-            f"3️⃣ больше_3 - выпадет 4, 5 или 6\n"
-            f"4️⃣ меньше_4 - выпадет 1, 2 или 3\n\n"
-            f"Напиши номер (1, 2, 3 или 4)"
-        )
+        txt = f"{game} Кости\n\nВыбери тип ставки:"
     elif game == '⚽':
-        txt = (
-            f"{game} Футбол\n\n"
-            f"Выбери ставку:\n"
-            f"1️⃣ гол - мяч в воротах\n"
-            f"2️⃣ мимо - мяч мимо ворот\n\n"
-            f"Напиши номер (1 или 2)"
-        )
+        txt = f"{game} Футбол\n\nВыбери тип ставки:"
     elif game == '🎯':
-        txt = (
-            f"{game} Дартс\n\n"
-            f"Выбери ставку:\n"
-            f"1️⃣ центр - в самый центр\n"
-            f"2️⃣ красное - в красную зону\n"
-            f"3️⃣ белое - в белую зону\n"
-            f"4️⃣ мимо - мимо мишени\n\n"
-            f"Напиши номер (1, 2, 3 или 4)"
-        )
+        txt = f"{game} Дартс\n\nВыбери тип ставки:"
     elif game == '🎳':
-        txt = (
-            f"{game} Боулинг\n\n"
-            f"Выбери ставку:\n"
-            f"1️⃣ страйк - все кегли сбиты\n"
-            f"2️⃣ мимо - не страйк\n\n"
-            f"Напиши номер (1 или 2)"
-        )
+        txt = f"{game} Боулинг\n\nВыбери тип ставки:"
     
     await state.update_data(selected_game=game)
     sent_msg = await bot.send_message(
         chat_id=msg.from_user.id,
         text=txt,
-        reply_markup=get_cancel_reply_keyboard()
+        reply_markup=get_bet_type_keyboard(game)
     )
     await save_message_id(msg.from_user.id, sent_msg.message_id)
 
@@ -850,6 +815,183 @@ async def play_from_balance_text(msg: Message, game: str, bet_type: str, amount:
     save_database(DB_FILE)
     await msg.answer(txt)
     await state.clear()
+
+
+async def play_from_balance_callback(cb: CallbackQuery, game: str, bet_type: str, amount: int, user_data: dict, state: FSMContext, bot: Bot):
+    """Игра с баланса через callback-кнопку"""
+    uid = cb.from_user.id
+    username = cb.from_user.username
+    
+    log_game_start(uid, game, bet_type, amount, username)
+    
+    sent_msg = await bot.send_message(
+        chat_id=cb.from_user.id,
+        text=f"💳 Списываем {amount} ⭐ с баланса...\n\n🎮 Запускаем {game}..."
+    )
+    
+    user_data['balance'] -= amount
+    
+    dm = await bot.send_dice(chat_id=cb.from_user.id, emoji=game)
+    await asyncio.sleep(4)
+    
+    dv = dm.dice.value
+    res = determine_game_result(game, bet_type, dv)
+    
+    user_data['total_bets'] += amount
+    user_data['games_played'] += 1
+    
+    if res['win']:
+        w = int(amount * res['coefficient'])
+        user_data['balance'] += w
+        user_data['total_wins'] += w
+        log_win(uid, game, bet_type, amount, w, username)
+        
+        txt = (
+            f"🎉 ВЫИГРЫШ!\n\n"
+            f"{game} Выпало: {res['outcome']}\n"
+            f"🎯 Ставка: {bet_type}\n\n"
+            f"💰 Выигрыш: {w} ⭐ (x{res['coefficient']})\n"
+            f"💳 Баланс: {user_data['balance']} ⭐"
+        )
+    else:
+        user_data['total_losses'] += amount
+        w = -amount
+        log_loss(uid, game, bet_type, amount, username)
+        
+        txt = (
+            f"😔 Не повезло\n\n"
+            f"{game} Выпало: {res['outcome']}\n"
+            f"🎯 Ставка: {bet_type}\n\n"
+            f"💸 Потеря: {amount} ⭐\n"
+            f"💳 Баланс: {user_data['balance']} ⭐"
+        )
+    
+    user_data['history'].append({
+        'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'game': game,
+        'bet_type': bet_type,
+        'amount': amount,
+        'result': res['outcome'],
+        'dice_value': dv,
+        'win': res['win'],
+        'winnings': w,
+        'payment_id': 'balance'
+    })
+    
+    save_database(DB_FILE)
+    await bot.send_message(chat_id=cb.from_user.id, text=txt)
+    await state.clear()
+
+
+# ==================== ОБРАБОТЧИКИ CALLBACK ДЛЯ ВЫБОРА СТАВОК ====================
+
+@router.callback_query(F.data.startswith("bet_type:"))
+async def bet_type_selected_callback(cb: CallbackQuery, state: FSMContext, bot: Bot):
+    """Выбор типа ставки через inline-кнопку"""
+    await cb.answer()
+    
+    bet_type = cb.data.split(":")[1]
+    data = await state.get_data()
+    game = data.get('selected_game')
+    
+    if not game:
+        await cb.message.edit_text("❌ Ошибка: игра не выбрана")
+        return
+    
+    await state.update_data(selected_bet_type=bet_type)
+    
+    ud = get_user_data(cb.from_user.id, cb.from_user, DB_FILE)
+    
+    await cb.message.edit_text(
+        f"{game} Ставка: {bet_type}\n\n"
+        f"💳 Твой баланс: {ud['balance']} ⭐\n\n"
+        f"Выбери сумму ставки:",
+        reply_markup=get_bet_amount_keyboard()
+    )
+
+
+@router.callback_query(F.data.startswith("bet_amount:"))
+async def bet_amount_selected_callback(cb: CallbackQuery, state: FSMContext, bot: Bot):
+    """Выбор суммы ставки через inline-кнопку"""
+    await cb.answer()
+    
+    amount = int(cb.data.split(":")[1])
+    data = await state.get_data()
+    game = data.get('selected_game')
+    bet_type = data.get('selected_bet_type')
+    
+    if not game or not bet_type:
+        await cb.message.edit_text("❌ Ошибка: игра или ставка не выбрана")
+        return
+    
+    ud = get_user_data(cb.from_user.id, cb.from_user, DB_FILE)
+    
+    if ud['balance'] >= amount:
+        # Играем с баланса
+        await cb.message.delete()
+        await play_from_balance_callback(cb, game, bet_type, amount, ud, state, bot)
+    else:
+        # Запрашиваем оплату
+        await cb.message.edit_text(f"💳 Оплата {amount} ⭐\n\nОтправляем счет...")
+        await bot.send_invoice(
+            chat_id=cb.from_user.id,
+            title=f"{game} {bet_type}",
+            description=f"Ставка {amount} ⭐ на {bet_type}",
+            payload=f"{game}:{bet_type}:{amount}",
+            provider_token="",
+            currency="XTR",
+            prices=[LabeledPrice(label="Ставка", amount=amount)]
+        )
+        await state.update_data(
+            pending_game=game,
+            pending_bet_type=bet_type,
+            pending_amount=amount
+        )
+
+
+@router.callback_query(F.data == "back_to_games")
+async def back_to_games_callback(cb: CallbackQuery, state: FSMContext):
+    """Возврат к выбору игр"""
+    await cb.answer()
+    await state.clear()
+    await cb.message.edit_text(
+        "🎮 Выбери игру:",
+        reply_markup=None
+    )
+    sent_msg = await cb.message.answer(
+        "🎮 Игры:",
+        reply_markup=get_games_reply_keyboard()
+    )
+    await save_message_id(cb.from_user.id, sent_msg.message_id)
+
+
+@router.callback_query(F.data == "back_to_bet_type")
+async def back_to_bet_type_callback(cb: CallbackQuery, state: FSMContext):
+    """Возврат к выбору типа ставки"""
+    await cb.answer()
+    
+    data = await state.get_data()
+    game = data.get('selected_game')
+    
+    if not game:
+        await cb.message.edit_text("❌ Ошибка: игра не выбрана")
+        return
+    
+    if game == '🏀':
+        txt = f"{game} Баскетбол\n\nВыбери тип ставки:"
+    elif game == '🎲':
+        txt = f"{game} Кости\n\nВыбери тип ставки:"
+    elif game == '⚽':
+        txt = f"{game} Футбол\n\nВыбери тип ставки:"
+    elif game == '🎯':
+        txt = f"{game} Дартс\n\nВыбери тип ставки:"
+    elif game == '🎳':
+        txt = f"{game} Боулинг\n\nВыбери тип ставки:"
+    
+    await cb.message.edit_text(
+        txt,
+        reply_markup=get_bet_type_keyboard(game)
+    )
 
 
 # ==================== СТАРЫЕ CALLBACK ОБРАБОТЧИКИ (удалим) ====================
