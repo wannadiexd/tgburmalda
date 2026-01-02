@@ -15,7 +15,7 @@ def get_reply_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="ℹ️ Правила")]
         ],
         resize_keyboard=True,
-        persistent=True
+        one_time_keyboard=True
     )
 
 
@@ -28,7 +28,8 @@ def get_games_reply_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="🎳 Боулинг")],
             [KeyboardButton(text="◀️ Назад")]
         ],
-        resize_keyboard=True
+        resize_keyboard=True,
+        one_time_keyboard=True
     )
 
 
@@ -39,7 +40,8 @@ def get_profile_reply_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="💰 Пополнить"), KeyboardButton(text="💸 Вывод")],
             [KeyboardButton(text="🎮 Играть"), KeyboardButton(text="◀️ Назад")]
         ],
-        resize_keyboard=True
+        resize_keyboard=True,
+        one_time_keyboard=True
     )
 
 
@@ -52,7 +54,8 @@ def get_deposit_amounts_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="⭐ 250"), KeyboardButton(text="✏️ Своя сумма")],
             [KeyboardButton(text="◀️ Назад")]
         ],
-        resize_keyboard=True
+        resize_keyboard=True,
+        one_time_keyboard=True
     )
 
 
@@ -189,9 +192,10 @@ def get_cancel_reply_keyboard() -> ReplyKeyboardMarkup:
     """Reply клавиатура с кнопкой отмены"""
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="❌ Отменить")]
+            [KeyboardButton(text="◀️ Назад")]
         ],
-        resize_keyboard=True
+        resize_keyboard=True,
+        one_time_keyboard=True
     )
 
 
@@ -228,7 +232,7 @@ def get_bet_type_keyboard(game: str) -> ReplyKeyboardMarkup:
             [KeyboardButton(text="◀️ Назад")]
         ]
     
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
 
 
 def get_bet_amount_keyboard() -> ReplyKeyboardMarkup:
@@ -240,7 +244,8 @@ def get_bet_amount_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="⭐ 250"), KeyboardButton(text="⭐ 500"), KeyboardButton(text="⭐ 1000")],
             [KeyboardButton(text="◀️ Назад")]
         ],
-        resize_keyboard=True
+        resize_keyboard=True,
+        one_time_keyboard=True
     )
 
 

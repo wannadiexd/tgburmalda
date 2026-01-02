@@ -444,13 +444,16 @@ async def text_play(msg: Message, bot: Bot):
 
 
 @router.message(F.text == "👤 Профиль")
-async def text_profile(msg: Message, bot: Bot):
+async def text_profile(msg: Message, state: FSMContext, bot: Bot):
     """Текстовая команда Профиль"""
     # Удаляем сообщение пользователя
     try:
         await msg.delete()
     except:
         pass
+    
+    # Сохраняем что мы в профиле
+    await state.update_data(in_profile=True)
     
     ud = get_user_data(msg.from_user.id, msg.from_user, DB_FILE)
     
@@ -547,12 +550,97 @@ async def back_to_main(msg: Message, state: FSMContext, bot: Bot):
     
     await delete_last_message(msg.from_user.id, bot)
     
+    # Получаем текущее состояние
+    current_state = await state.get_state()
+    
     data = await state.get_data()
     game = data.get('selected_game')
     bet_type = data.get('selected_bet_type')
+    in_profile = data.get('in_profile')
+    in_deposit = data.get('in_deposit')
+    in_withdraw = data.get('in_withdraw')
+    
+    # Если мы в состоянии ожидания суммы вывода - возвращаемся в профиль
+    if current_state == BetStates.waiting_withdraw_amount:
+        await state.update_data(in_deposit=False, in_withdraw=False)
+        await state.set_state(None)
+        
+        ud = get_user_data(msg.from_user.id, msg.from_user, DB_FILE)
+        
+        # Подсчет выигрышных и проигрышных игр
+        wins_count = sum(1 for g in ud['history'] if g['win'])
+        losses_count = sum(1 for g in ud['history'] if not g['win'])
+        wr = (wins_count / ud['games_played'] * 100) if ud['games_played'] > 0 else 0
+        
+        txt = (
+            f"👤 Профиль\n\n"
+            f"💳 Баланс: {ud['balance']} ⭐\n"
+            f"🎮 Всего игр: {ud['games_played']}\n"
+            f"✅ Выигрышей: {wins_count} игр ({wr:.1f}%)\n"
+            f"❌ Проигрышей: {losses_count} игр\n"
+            f"💰 Всего ставок: {ud['total_bets']} ⭐"
+        )
+        
+        if ud['history']:
+            txt += "\n\n📜 Последние 5:\n" + "\n".join(
+                f"{'✅' if g['win'] else '❌'} {g['game']} {g['bet_type']} {g['winnings']:+d} ⭐"
+                for g in ud['history'][-5:][::-1]
+            )
+        
+        sent_msg = await bot.send_message(
+            chat_id=msg.from_user.id,
+            text=txt,
+            reply_markup=get_profile_reply_keyboard()
+        )
+        await save_message_id(msg.from_user.id, sent_msg.message_id)
+    
+    # Если мы в меню пополнения/вывода - возвращаемся в профиль
+    elif in_deposit or in_withdraw:
+        await state.update_data(in_deposit=False, in_withdraw=False)
+        
+        ud = get_user_data(msg.from_user.id, msg.from_user, DB_FILE)
+        
+        # Подсчет выигрышных и проигрышных игр
+        wins_count = sum(1 for g in ud['history'] if g['win'])
+        losses_count = sum(1 for g in ud['history'] if not g['win'])
+        wr = (wins_count / ud['games_played'] * 100) if ud['games_played'] > 0 else 0
+        
+        txt = (
+            f"👤 Профиль\n\n"
+            f"💳 Баланс: {ud['balance']} ⭐\n"
+            f"🎮 Всего игр: {ud['games_played']}\n"
+            f"✅ Выигрышей: {wins_count} игр ({wr:.1f}%)\n"
+            f"❌ Проигрышей: {losses_count} игр\n"
+            f"💰 Всего ставок: {ud['total_bets']} ⭐"
+        )
+        
+        if ud['history']:
+            txt += "\n\n📜 Последние 5:\n" + "\n".join(
+                f"{'✅' if g['win'] else '❌'} {g['game']} {g['bet_type']} {g['winnings']:+d} ⭐"
+                for g in ud['history'][-5:][::-1]
+            )
+        
+        sent_msg = await bot.send_message(
+            chat_id=msg.from_user.id,
+            text=txt,
+            reply_markup=get_profile_reply_keyboard()
+        )
+        await save_message_id(msg.from_user.id, sent_msg.message_id)
+    
+    # Если мы в профиле - возвращаемся в главное меню
+    elif in_profile:
+        await state.update_data(in_profile=False)
+        await state.clear()
+        
+        sent_msg = await bot.send_message(
+            chat_id=msg.from_user.id,
+            text="🎰 Главное меню",
+            reply_markup=get_reply_keyboard()
+        )
+        await save_message_id(msg.from_user.id, sent_msg.message_id)
     
     # Если выбрана сумма - возвращаемся к выбору типа ставки
-    if game and bet_type:
+    elif game and bet_type:
         await state.update_data(selected_bet_type=None)
         
         if game == '🏀':
@@ -606,6 +694,9 @@ async def profile_actions(msg: Message, state: FSMContext, bot: Bot):
     await delete_last_message(msg.from_user.id, bot)
     
     if msg.text == "💰 Пополнить":
+        # Помечаем что мы в меню пополнения
+        await state.update_data(in_deposit=True)
+        
         sent_msg = await bot.send_message(
             chat_id=msg.from_user.id,
             text="💰 Пополнение баланса\n\n"
@@ -614,6 +705,9 @@ async def profile_actions(msg: Message, state: FSMContext, bot: Bot):
         )
         await save_message_id(msg.from_user.id, sent_msg.message_id)
     elif msg.text == "💸 Вывод":
+        # Помечаем что мы в меню вывода
+        await state.update_data(in_withdraw=True)
+        
         ud = get_user_data(msg.from_user.id, msg.from_user, DB_FILE)
         if ud['balance'] < 1:
             sent_msg = await bot.send_message(
