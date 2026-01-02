@@ -41,6 +41,10 @@ def save_database(db_file: str):
 
 def get_user_data(user_id: int, user_obj=None, db_file: str = None) -> Dict:
     """Получение данных пользователя, создание если не существует"""
+    # Перезагружаем базу данных для получения актуальных данных
+    if db_file and os.path.exists(db_file):
+        load_database(db_file)
+    
     if user_id not in users_db:
         users_db[user_id] = {
             'balance': 0,
